@@ -1,1 +1,10 @@
+#Ignore Jupyter Notebook Checkpoints
 .ipynb_checkpoints/
+
+# Ignore raw audio data
+data/raw/
+*.mp3
+*.wav
+
+#Ignore large processed datasets if they exceed 50MB
+data/processed/*.csv
