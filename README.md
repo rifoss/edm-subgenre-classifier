@@ -1,4 +1,5 @@
 # My EDM Classifier Project
+An end-to-end Machine Learning project designed to classify Electronic Dance Music (EDM) tracks into specific subgenres (Techno, House, Dubstep) using digital signal processing and supervised learning.
 
 ## Project Overview
 This repository holds the code for a 12-week machine learning project designed to classify EDM subgenres based on audio features extracted using Librosa.
