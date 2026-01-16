@@ -41,6 +41,10 @@ def extract_features():
                     # We use .item() to ensure we get a single number, not an array
                     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
                     bpm = tempo.item() if isinstance(tempo, np.ndarray) else tempo
+
+                    # Force 'half-time' detections to full-time (70 -> 140)
+                    if bpm < 100:
+                        bpm = bpm * 2
                     
                     # 3. Extract Spectral Centroid (Brightness)
                     # We take the mean to get one average value for the 30s
