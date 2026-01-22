@@ -119,6 +119,10 @@ if file:
                     prediction = encoder.inverse_transform([pred_code])[0]
                     probs = model.predict_proba(X_input)[0]
                     confidence = np.max(probs) * 100
+
+                    # --- SAVE STATE FOR FEEDBACK ---
+                    st.session_state['last_prediction'] = prediction
+                    st.session_state['last_bpm'] = detected_bpm
                     
                     # --- Results Dashboard ---
                     st.divider()
@@ -145,3 +149,22 @@ if file:
                         
                 except Exception as e:
                     st.error(f"Analysis failed: {e}")
+
+# --- FEEDBACK LOGIC ---
+if 'last_prediction' in st.session_state:
+    st.divider()
+    st.subheader("🛠️ Model Improvement Program")
+    
+    with st.expander("Is this prediction incorrect? Help us retrain."):
+        st.write(f"The AI labeled this as **{st.session_state['last_prediction']}**.")
+        
+        correct_genre = st.selectbox(
+            "What is the actual subgenre?", 
+            options=["Techno", "House", "Dubstep", "Other / Not EDM"]
+        )
+        
+        if st.button("Submit Correction"):
+            # This acknowledges the user. Future steps: save this to a CSV or database.
+            st.success(f"Feedback received! Track noted as **{correct_genre}**. This will be used in our Week 9 dataset expansion.")
+            # Clear the state so the message disappears if they run a new song
+            del st.session_state['last_prediction']
