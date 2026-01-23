@@ -6,6 +6,7 @@ import joblib
 import os
 import tempfile
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="EDM Subgenre Classifier", page_icon="🎧", layout="wide")
@@ -83,6 +84,25 @@ def extract_features_live(uploaded_file):
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+# -- SAVE FEEDBACK LOGIC
+def save_feedback(filename, predicted, corrected):
+    """Appends feedback to a local CSV file."""
+    log_file = 'data/processed/feedback_log.csv'
+    
+    # Create the data row
+    new_data = pd.DataFrame([{
+        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'filename': filename,
+        'predicted': predicted,
+        'corrected': corrected
+    }])
+    
+    # Check if file exists to decide if we need to write the header
+    header_needed = not os.path.exists(log_file)
+    
+    # Append to CSV (mode='a' means append)
+    new_data.to_csv(log_file, mode='a', index=False, header=header_needed)
+
 # --- UI INTERFACE ---
 st.title("EDM Subgenre Classifier")
 st.markdown("Analyze your tracks with Artificial Intelligence.")
@@ -123,6 +143,7 @@ if file:
                     # --- SAVE STATE FOR FEEDBACK ---
                     st.session_state['last_prediction'] = prediction
                     st.session_state['last_bpm'] = detected_bpm
+                    st.session_state['last_filename'] = file.name
                     
                     # --- Results Dashboard ---
                     st.divider()
@@ -164,7 +185,14 @@ if 'last_prediction' in st.session_state:
         )
         
         if st.button("Submit Correction"):
-            # This acknowledges the user. Future steps: save this to a CSV or database.
-            st.success(f"Feedback received! Track noted as **{correct_genre}**. This will be used in our Week 9 dataset expansion.")
-            # Clear the state so the message disappears if they run a new song
+            # Call the save function
+            save_feedback(
+                st.session_state['last_filename'], 
+                st.session_state['last_prediction'], 
+                correct_genre
+            )
+            
+            st.success("Correction saved to feedback_log.csv! We will use this for retraining.")
+            
+            # Optional: Clear the state so the feedback box closes/resets
             del st.session_state['last_prediction']
