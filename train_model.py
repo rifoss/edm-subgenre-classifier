@@ -4,6 +4,7 @@ import os
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
+from xgboost import XGBClassifier
 
 # 1. Load the scaled data from Day 28
 DATA_PATH = 'data/processed/features_scaled.csv'
@@ -35,7 +36,18 @@ def train_baseline():
 
     # 4. Initialize and Train the Random Forest
     # n_estimators=100 means we are using 100 small decision trees working together
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    # model = RandomForestClassifier(n_estimators=100, random_state=42)
+    
+    # 4. Initialize and Train the XGBoost Algorithm
+    model = XGBClassifier(
+        n_estimators=100,
+        learning_rate=0.1,
+        max_depth=5,
+        random_state=42,
+        use_label_encoder=False,
+        eval_metric='mlogloss'
+    )
+    
     model.fit(X_train, y_train)
 
     # 5. Evaluate the Model
