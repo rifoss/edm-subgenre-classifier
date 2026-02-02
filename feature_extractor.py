@@ -46,23 +46,33 @@ def extract_features():
                     if bpm < 100:
                         bpm = bpm * 2
                     
-                    # 3. Extract Spectral Centroid (Brightness)
+                    # 3. Extract spectral features
                     # We take the mean to get one average value for the 30s
                     centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
+                    flatness = np.mean(librosa.feature.spectral_flatness(y=y))
+                    zcr = np.mean(librosa.feature.zero_crossing_rate(y))
+
+                    # 4. HPSS (The Week 10 Pivot)
+                    # Separates percussive (drums) from harmonic (melody/chords)
+                    harmonic, percussive = librosa.effects.hpss(y)
+                    perc_har_ratio = np.mean(percussive) / np.mean(harmonic) if np.mean(harmonic) > 0 else 0
                     
-                    # 4. Extract 13 MFCCs
+                    # 5. Extract 13 MFCCs
                     mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
                     
                     # Calculate Mean (Average Texture) and Std (The 'Swing'/Variation)
                     mfccs_mean = np.mean(mfccs, axis=1)
                     mfccs_std = np.std(mfccs, axis=1)
                     
-                    # 5. Create a dictionary representing one 'row' in our future spreadsheet
+                    # 6. Create a dictionary representing one 'row' in our future spreadsheet
                     feature_row = {
                         'filename': filename,
                         'genre': genre,
-                        'tempo': float(bpm),
-                        'spectral_centroid': float(centroid)
+                        'tempo': bpm,
+                        'spectral_centroid': centroid,
+                        'spectral_flatness': flatness,
+                        'zero_crossing_rate': zcr,
+                        'perc_har_ratio': perc_har_ratio,
                     }
                     
                     # Add all 13 MFCC Means and 13 MFCC Stds to the dictionary
