@@ -12,7 +12,7 @@ SCALER_FILE = 'data/processed/scaler.joblib'
 ENCODER_FILE = 'data/processed/label_encoder.joblib'
 
 def run_preprocessing():
-    print("Starting Day 28 Preprocessing...")
+    print("Starting Preprocessing...")
 
     # Load the data extracted from Day 26
     if not os.path.exists(INPUT_FILE):
@@ -57,7 +57,7 @@ def run_preprocessing():
     joblib.dump(label_encoder, ENCODER_FILE)
 
     print("-" * 30)
-    print(f"Day 28 Checklist Complete!")
+    print(f"Success: Data scaled and transformers saved.")
     print(f"Scaled CSV: {OUTPUT_FILE}")
     print(f"Scaler Object: {SCALER_FILE}")
     print(f"Label Encoder: {ENCODER_FILE}")
