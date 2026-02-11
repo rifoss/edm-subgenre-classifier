@@ -1,3 +1,18 @@
+Engineering Note - Best Parameters for 250 Samples
+
+Colsample_bytree: 1.0
+Learning_rate: 0.2
+Max_depth: 3 - This means simpler model performed better
+n_estimators: 300 - We hit the ceiling, more estimators could help, but slightly
+subsample: 0.8
+
+Accuracy: 80%
+
+
+
+
+
+
 Engineering Note: Solving the Techno/House Overlap
 
 The Problem: The "Tempo Trap"
