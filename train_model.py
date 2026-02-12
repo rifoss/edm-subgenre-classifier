@@ -23,8 +23,8 @@ def train_baseline():
     df = pd.read_csv(DATA_PATH)
     
     # 2. Split Features (X) and Labels (y)
-    X = df.drop(columns=['genre'])
-    y = df['genre']
+    X = df.drop(columns=['label'])
+    y = df['label']
 
     # 3. Train/Test Split (80% Train, 20% Test)
     # random_state=42 ensures the split is the same every time we run it
@@ -40,9 +40,11 @@ def train_baseline():
     
     # 4. Initialize and Train the XGBoost Algorithm
     model = XGBClassifier(
-        n_estimators=100,
-        learning_rate=0.1,
-        max_depth=5,
+        n_estimators=500,
+        learning_rate=0.05,
+        max_depth=3,
+        subsample=0.8,
+        colsample_bytree=1.0,
         random_state=42,
         use_label_encoder=False,
         eval_metric='mlogloss'
