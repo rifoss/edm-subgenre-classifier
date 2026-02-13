@@ -8,7 +8,7 @@ from xgboost import XGBClassifier
 
 # 1. Load the scaled data from Day 28
 DATA_PATH = 'data/processed/features_scaled.csv'
-MODEL_PATH = 'models/baseline_model.joblib'
+MODEL_PATH = 'models/music_classifier.joblib'
 
 if not os.path.exists('models'):
     os.makedirs('models')
