@@ -64,7 +64,7 @@ def extract_features_v5_inference(file_path):
 st.sidebar.title("🎧 Project Details")
 st.sidebar.info("""
 **Model Version:** 5.0 (Augmented)
-**Accuracy:** 84.5%
+**Accuracy:** 83.8%
 **Input:** 59 Signal Descriptors
 """)
 
