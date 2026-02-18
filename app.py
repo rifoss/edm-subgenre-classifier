@@ -120,6 +120,7 @@ if uploaded_file is not None:
     st.audio(uploaded_file)
     
     if st.button("Analyze Track"):
+        st.write("DEBUG: Button clicked. Starting extraction...")
         with st.spinner("Analyzing audio textures..."):
             try:
                 # 1. Duration Check - Wrapped in a specific try/except for corrupted files
@@ -134,8 +135,10 @@ if uploaded_file is not None:
                 else:
                     # 2. Feature Extraction
                     features = extract_features_v5_inference(TEMP_FILE)
+                    st.write("DEBUG: Features extracted.")
                     
                     if features is not None:
+                        st.write("DEBUG: Model loading...")
                         # 3. Load Assets
                         model = joblib.load(MODEL_PATH)
                         scaler = joblib.load(SCALER_PATH)
