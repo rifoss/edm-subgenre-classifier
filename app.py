@@ -50,6 +50,8 @@ def extract_features_v5_inference(file_path):
         # Load 30s sample from the middle (60s)
         y, sr = librosa.load(file_path, sr=22050, offset=60, duration=30, res_type='kaiser_fast')
         
+        st.write(f"DEBUG: File loaded. Sample Duration: {duration}s")
+
         # 1. Stats
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
         centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
