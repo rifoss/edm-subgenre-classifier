@@ -8,6 +8,7 @@ data/raw/
 
 #Ignore large processed datasets if they exceed 50MB
 data/processed/*.csv
+data/feedback.csv
 
 #Ignore .exe files
 *.exe

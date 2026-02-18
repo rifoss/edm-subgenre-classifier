@@ -4,19 +4,45 @@ import numpy as np
 import pandas as pd
 import joblib
 import os
+from datetime import datetime
 
 # --- CONFIGURATION ---
 MODEL_PATH = 'models/music_classifier.joblib'
 SCALER_PATH = 'data/processed/scaler.joblib'
 ENCODER_PATH = 'data/processed/label_encoder.joblib'
+FEEDBACK_PATH = 'data/feedback.csv'
+TEMP_FILE = "temp_audio_upload.mp3"
 
 st.set_page_config(page_title="EDM Subgenre Classifier v5", page_icon="🎧", layout="centered")
+
+# Initialize Session State for persistence
+if 'prediction_results' not in st.session_state:
+    st.session_state.prediction_results = None
+if 'submitted' not in st.session_state:
+    st.session_state.submitted = False
+
+def save_feedback(filename, predicted, corrected):
+    """Appends user feedback to a local CSV file for future model retraining."""
+    new_data = pd.DataFrame([{
+        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'filename': filename,
+        'predicted_genre': predicted,
+        'corrected_genre': corrected
+    }])
+    
+    # Check if log exists to handle header correctly
+    if not os.path.isfile(FEEDBACK_PATH):
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(FEEDBACK_PATH), exist_ok=True)
+        new_data.to_csv(FEEDBACK_PATH, index=False)
+    else:
+        new_data.to_csv(FEEDBACK_PATH, mode='a', header=False, index=False)
 
 def extract_features_v5_inference(file_path):
     """Mirroring the v5 Batch Extractor logic for 59 features."""
     try:
         # Load 30s sample from the middle (60s)
-        y, sr = librosa.load(file_path, offset=60, duration=30)
+        y, sr = librosa.load(file_path, sr=22050, offset=60, duration=30)
         
         # 1. Stats
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
@@ -79,13 +105,15 @@ st.sidebar.markdown("[![GitHub](https://img.shields.io/badge/GitHub-Repo-black?s
 st.title("🎧 EDM Subgenre Classifier")
 st.markdown("Identify the subgenre of your track using high-dimensional texture analysis.")
 
-# Unified temp file name
-TEMP_FILE = "temp_audio_upload.mp3"
-
 uploaded_file = st.file_uploader("Upload a Techno, House, or Dubstep track (MP3/WAV)", type=["mp3", "wav"])
 
 if uploaded_file is not None:
-    # Save temp file
+    # Check if a new file was uploaded to reset previous results
+    if 'last_file' not in st.session_state or st.session_state.last_file != uploaded_file.name:
+        st.session_state.prediction_results = None
+        st.session_state.submitted = False
+        st.session_state.last_file = uploaded_file.name
+
     with open(TEMP_FILE, "wb") as f:
         f.write(uploaded_file.getbuffer())
     
@@ -119,26 +147,82 @@ if uploaded_file is not None:
                         prediction = np.argmax(probs)
                         genre = encoder.classes_[prediction]
                         confidence = np.max(probs)
-                        
-                        # 5. Results Display
-                        st.success(f"### Predicted Genre: **{genre.upper()}**")
-                        
-                        if confidence < 0.65:
-                            st.warning(f"**Low Confidence ({confidence:.1%}):** This track may be a hybrid (e.g. Tech-House) or an edge case.")
-                        else:
-                            st.info(f"Model Confidence: **{confidence:.1%}**")
-                        
-                        chart_data = pd.DataFrame({'Genre': encoder.classes_, 'Confidence': probs}).set_index('Genre')
-                        st.bar_chart(chart_data)
-                    else:
-                        st.warning("**Analysis Failed:** Could not extract features. The audio file might be corrupted or in an unsupported format.")
 
+                        # STORE IN SESSION STATE
+                        st.session_state.prediction_results = {
+                            'genre': encoder.classes_[np.argmax(probs)],
+                            'confidence': np.max(probs),
+                            'probs': probs,
+                            'classes': encoder.classes_
+                        }
             except FileNotFoundError:
                 st.error("**Critical Error:** Model files (`.joblib`) not found. Please run training first.")
             except ValueError:
                 st.error("**Dimension Mismatch:** The model expects a different number of features. Update your Scaler!")
             except Exception as e:
                 st.error(f"**An unexpected error occurred:** {e}")
+                        
+    # 5. Results Display
+    if st.session_state.prediction_results:
+        res = st.session_state.prediction_results
+        st.success(f"### Predicted Genre: **{res['genre'].upper()}**")
+        
+        if res['confidence'] < 0.65:
+            st.warning(f"**Low Confidence ({res['confidence']:.1%}):** This track may be a hybrid (e.g. Tech-House) or an edge case.")
+        else:
+            st.info(f"Model Confidence: **{res['confidence']:.1%}**")
+        
+        chart_data = pd.DataFrame({'Genre': res['classes'], 'Confidence': res['probs']}).set_index('Genre')
+        st.bar_chart(chart_data)
+
+        # --- DOCUMENTATION: FEATURE LEGEND ---
+        with st.expander("📖 Understanding the Analysis (Feature Legend)"):
+            st.write("""
+            Your track is analyzed across **59 distinct signal descriptors**. Here is what the model looks for:
+            """)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**Spectral Features (Brightness & Texture)**")
+                st.write("- **Spectral Centroid:** The 'center of mass' of the sound. Higher values indicate 'brighter' sounds like EDM leads.")
+                st.write("- **Spectral Rolloff:** The frequency below which 85% of the spectral energy lies. It distinguishes 'airy' synth textures from bass-heavy ones.")
+                st.write("- **Spectral Flatness:** Measures how 'noise-like' a sound is vs. how 'tonal' it is. High flatness often signals aggressive percussion or white-noise risers.")
+                
+            with col2:
+                st.markdown("**Timbral & Rhythmic Features**")
+                st.write("- **MFCCs (13 coefficients):** These capture the 'shape' of the sound, similar to how human ears perceive timbre. Crucial for identifying specific synth types.")
+                st.write("- **Chroma STFT:** Analyzes the harmonic content. This helps the model distinguish the melodic 'soul' of House from the mechanical loops of Techno.")
+                st.write("- **RMS Energy:** The average volume (loudness). Used to detect high-energy 'drops' versus quiet ambient breakdowns.")
+
+            st.info("💡 **Pro Tip:** The model samples a 30-second window starting at the 60-second mark to capture the track's core identity.")
+
+        # --- FEEDBACK LOOP ---
+        st.markdown("---")
+        
+        # Action Bar: Reset and Flagging
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            if st.button("🗑️ Clear Results"):
+                st.session_state.prediction_results = None
+                st.session_state.submitted = False
+                st.rerun()
+
+        with col2:
+            # Checkbox with a key to prevent it from resetting randomly
+            is_wrong = st.checkbox("🔍 Flag incorrect prediction", key="feedback_toggle")
+
+        if is_wrong:
+            correct_genre = st.selectbox("Select the correct genre:", res['classes'], key="correction_select")
+            if st.button("Submit Correction", key="submit_btn"):
+                save_feedback(uploaded_file.name, res['genre'], correct_genre)
+                st.session_state.submitted = True
+                st.rerun()
+
+        # Persistent Success Message
+        if st.session_state.get("submitted"):
+            st.success("Thank you! Feedback saved for future model training.")
 
     # --- CLEANUP ---
     if os.path.exists(TEMP_FILE):
