@@ -52,7 +52,7 @@ def extract_features_v5_inference(file_path):
     """Mirroring the v5 Batch Extractor logic for 59 features."""
     try:
         st.write("DEBUG: Starting librosa.load...")
-        y, sr = librosa.load(file_path, sr=22050, offset=60, duration=30, res_type='kaiser_fast')
+        y, sr = librosa.load(file_path, sr=22050, offset=60, duration=30, res_type='soxr_qq')
         st.write(f"DEBUG: librosa.load complete. y.shape={y.shape}, sr={sr}")
 
         st.write("DEBUG: Extracting tempo...")
