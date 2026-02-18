@@ -21,8 +21,7 @@ ENCODER_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'label_encoder.joblib
 FEEDBACK_PATH = os.path.join(BASE_DIR, 'data', 'feedback.csv')
 
 # Use the temp folder provided by the OS for audio buffer
-ext = os.path.splitext(uploaded_file.name)[1]
-TEMP_FILE = os.path.join(tempfile.gettempdir(), f"temp_audio_upload{ext}")
+TEMP_FILE = os.path.join(tempfile.gettempdir(), "temp_audio_upload.mp3")
 
 st.set_page_config(page_title="EDM Subgenre Classifier v5", page_icon="🎧", layout="centered")
 
