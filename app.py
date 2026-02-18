@@ -57,6 +57,7 @@ def extract_features_v5_inference(file_path):
 
         st.write("DEBUG: Extracting tempo...")
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+        tempo = float(np.squeeze(tempo))
         st.write(f"DEBUG: tempo={tempo}")
 
         st.write("DEBUG: Extracting spectral features...")
