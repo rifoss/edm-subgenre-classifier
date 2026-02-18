@@ -7,11 +7,17 @@ import os
 from datetime import datetime
 
 # --- CONFIGURATION ---
-MODEL_PATH = 'models/music_classifier.joblib'
-SCALER_PATH = 'data/processed/scaler.joblib'
-ENCODER_PATH = 'data/processed/label_encoder.joblib'
-FEEDBACK_PATH = 'data/feedback.csv'
-TEMP_FILE = "temp_audio_upload.mp3"
+# Get the absolute path of the directory where app.py is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Build absolute paths to your assets
+MODEL_PATH = os.path.join(BASE_DIR, 'models', 'music_classifier.joblib')
+SCALER_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'scaler.joblib')
+ENCODER_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'label_encoder.joblib')
+FEEDBACK_PATH = os.path.join(BASE_DIR, 'data', 'feedback.csv')
+
+# Use the temp folder provided by the OS for audio buffer
+TEMP_FILE = os.path.join(BASE_DIR, "temp_audio_upload.mp3")
 
 st.set_page_config(page_title="EDM Subgenre Classifier v5", page_icon="🎧", layout="centered")
 
