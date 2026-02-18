@@ -51,49 +51,60 @@ def save_feedback(filename, predicted, corrected):
 def extract_features_v5_inference(file_path):
     """Mirroring the v5 Batch Extractor logic for 59 features."""
     try:
-        # Load 30s sample from the middle (60s)
+        st.write("DEBUG: Starting librosa.load...")
         y, sr = librosa.load(file_path, sr=22050, offset=60, duration=30, res_type='kaiser_fast')
+        st.write(f"DEBUG: librosa.load complete. y.shape={y.shape}, sr={sr}")
 
-        # 1. Stats
+        st.write("DEBUG: Extracting tempo...")
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+        st.write(f"DEBUG: tempo={tempo}")
+
+        st.write("DEBUG: Extracting spectral features...")
         centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
         rolloff = np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr))
         flatness = np.mean(librosa.feature.spectral_flatness(y=y))
         zcr = np.mean(librosa.feature.zero_crossing_rate(y))
         rms = np.mean(librosa.feature.rms(y=y))
-        
-        # 2. HPSS
+        st.write("DEBUG: Spectral features done.")
+
+        st.write("DEBUG: Running HPSS...")
         harmonic, percussive = librosa.effects.hpss(y)
         h_mean = np.mean(harmonic)
         p_mean = np.mean(percussive)
         ratio = p_mean / h_mean if h_mean > 0 else 0
-        
-        # 3. Spectral Contrast (Mean + Std)
+        st.write("DEBUG: HPSS done.")
+
+        st.write("DEBUG: Extracting spectral contrast...")
         contrast = librosa.feature.spectral_contrast(y=y, sr=sr)
         contrast_mean = np.mean(contrast, axis=1)
         contrast_std = np.std(contrast, axis=1)
-        
-        # 4. MFCCs (Mean + Std)
+        st.write("DEBUG: Spectral contrast done.")
+
+        st.write("DEBUG: Extracting MFCCs...")
         mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
         mfccs_mean = np.mean(mfccs, axis=1)
         mfccs_std = np.std(mfccs, axis=1)
-        
-        # 5. Chroma (Mean only)
+        st.write("DEBUG: MFCCs done.")
+
+        st.write("DEBUG: Extracting chroma...")
         chroma = np.mean(librosa.feature.chroma_stft(y=y, sr=sr), axis=1)
-        
-        # BUILD FEATURE VECTOR
+        st.write("DEBUG: Chroma done.")
+
+        st.write("DEBUG: Building feature vector...")
         row = [float(tempo), centroid, rolloff, flatness, zcr, rms, ratio]
         for i in range(len(contrast_mean)):
             row.extend([contrast_mean[i], contrast_std[i]])
         for i in range(len(mfccs_mean)):
             row.extend([mfccs_mean[i], mfccs_std[i]])
         row.extend(chroma.tolist())
-        
+
+        st.write(f"DEBUG: Feature vector built. Length={len(row)}")
         return np.array(row).reshape(1, -1)
 
     except Exception as e:
-        # We don't use st.error here to avoid double-posting errors in the UI
-        print(f"Extraction Error: {e}")
+        st.error(f"EXTRACTION FAILED AT: {e}")
+        import traceback
+        st.code(traceback.format_exc())
         return None
 
 def get_audio_duration(path):
