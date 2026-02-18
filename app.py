@@ -5,6 +5,10 @@ import pandas as pd
 import joblib
 import os
 from datetime import datetime
+import tempfile
+
+from mutagen.mp3 import MP3
+from mutagen import File as MutaFile
 
 # --- CONFIGURATION ---
 # Get the absolute path of the directory where app.py is located
@@ -17,7 +21,8 @@ ENCODER_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'label_encoder.joblib
 FEEDBACK_PATH = os.path.join(BASE_DIR, 'data', 'feedback.csv')
 
 # Use the temp folder provided by the OS for audio buffer
-TEMP_FILE = os.path.join(BASE_DIR, "temp_audio_upload.mp3")
+ext = os.path.splitext(uploaded_file.name)[1]
+TEMP_FILE = os.path.join(tempfile.gettempdir(), f"temp_audio_upload{ext}")
 
 st.set_page_config(page_title="EDM Subgenre Classifier v5", page_icon="🎧", layout="centered")
 
@@ -49,8 +54,6 @@ def extract_features_v5_inference(file_path):
     try:
         # Load 30s sample from the middle (60s)
         y, sr = librosa.load(file_path, sr=22050, offset=60, duration=30, res_type='kaiser_fast')
-        
-        st.write(f"DEBUG: File loaded. Sample Duration: {duration}s")
 
         # 1. Stats
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
@@ -94,6 +97,20 @@ def extract_features_v5_inference(file_path):
         print(f"Extraction Error: {e}")
         return None
 
+def get_audio_duration(path):
+    try:
+        audio = MutaFile(path)
+        return audio.info.length if audio else 0
+    except:
+        return 0
+
+@st.cache_resource
+def load_models():
+    model = joblib.load(MODEL_PATH)
+    scaler = joblib.load(SCALER_PATH)
+    encoder = joblib.load(ENCODER_PATH)
+    return model, scaler, encoder
+
 # --- SIDEBAR & CREDITS ---
 st.sidebar.title("🎧 Project Details")
 st.sidebar.info("""
@@ -128,9 +145,6 @@ if uploaded_file is not None:
     st.audio(uploaded_file)
     
     if st.button("Analyze Track"):
-        st.write("--- DEBUG START ---")
-        st.write(f"Checking for model at: {MODEL_PATH}")
-        st.write(f"File exists: {os.path.exists(MODEL_PATH)}")
         with st.spinner("Analyzing audio textures..."):
             try:
                 # 1. Duration Check - Wrapped in a specific try/except for corrupted files
@@ -145,10 +159,8 @@ if uploaded_file is not None:
                 else:
                     # 2. Feature Extraction
                     features = extract_features_v5_inference(TEMP_FILE)
-                    st.write("DEBUG: Features extracted.")
                     
                     if features is not None:
-                        st.write("DEBUG: Model loading...")
                         # 3. Load Assets
                         model = joblib.load(MODEL_PATH)
                         scaler = joblib.load(SCALER_PATH)
