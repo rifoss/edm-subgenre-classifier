@@ -51,47 +51,32 @@ def save_feedback(filename, predicted, corrected):
 def extract_features_v5_inference(file_path):
     """Mirroring the v5 Batch Extractor logic for 59 features."""
     try:
-        st.write("DEBUG: Starting librosa.load...")
         y, sr = librosa.load(file_path, sr=22050, offset=60, duration=30, res_type='soxr_qq')
-        st.write(f"DEBUG: librosa.load complete. y.shape={y.shape}, sr={sr}")
 
-        st.write("DEBUG: Extracting tempo...")
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
         tempo = float(np.squeeze(tempo))
-        st.write(f"DEBUG: tempo={tempo}")
 
-        st.write("DEBUG: Extracting spectral features...")
         centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
         rolloff = np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr))
         flatness = np.mean(librosa.feature.spectral_flatness(y=y))
         zcr = np.mean(librosa.feature.zero_crossing_rate(y))
         rms = np.mean(librosa.feature.rms(y=y))
-        st.write("DEBUG: Spectral features done.")
 
-        st.write("DEBUG: Running HPSS...")
         harmonic, percussive = librosa.effects.hpss(y)
         h_mean = np.mean(harmonic)
         p_mean = np.mean(percussive)
         ratio = p_mean / h_mean if h_mean > 0 else 0
-        st.write("DEBUG: HPSS done.")
 
-        st.write("DEBUG: Extracting spectral contrast...")
         contrast = librosa.feature.spectral_contrast(y=y, sr=sr)
         contrast_mean = np.mean(contrast, axis=1)
         contrast_std = np.std(contrast, axis=1)
-        st.write("DEBUG: Spectral contrast done.")
 
-        st.write("DEBUG: Extracting MFCCs...")
         mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
         mfccs_mean = np.mean(mfccs, axis=1)
         mfccs_std = np.std(mfccs, axis=1)
-        st.write("DEBUG: MFCCs done.")
 
-        st.write("DEBUG: Extracting chroma...")
         chroma = np.mean(librosa.feature.chroma_stft(y=y, sr=sr), axis=1)
-        st.write("DEBUG: Chroma done.")
 
-        st.write("DEBUG: Building feature vector...")
         row = [float(tempo), centroid, rolloff, flatness, zcr, rms, ratio]
         for i in range(len(contrast_mean)):
             row.extend([contrast_mean[i], contrast_std[i]])
@@ -99,7 +84,6 @@ def extract_features_v5_inference(file_path):
             row.extend([mfccs_mean[i], mfccs_std[i]])
         row.extend(chroma.tolist())
 
-        st.write(f"DEBUG: Feature vector built. Length={len(row)}")
         return np.array(row).reshape(1, -1)
 
     except Exception as e:
