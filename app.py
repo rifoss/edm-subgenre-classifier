@@ -126,7 +126,9 @@ if uploaded_file is not None:
     st.audio(uploaded_file)
     
     if st.button("Analyze Track"):
-        st.write("DEBUG: Button clicked. Starting extraction...")
+        print("--- DEBUG START ---")
+        print(f"Checking for model at: {MODEL_PATH}")
+        print(f"File exists: {os.path.exists(MODEL_PATH)}")
         with st.spinner("Analyzing audio textures..."):
             try:
                 # 1. Duration Check - Wrapped in a specific try/except for corrupted files
