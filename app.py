@@ -7,11 +7,14 @@ import os
 from datetime import datetime
 import tempfile
 
-from mutagen.mp3 import MP3
+import warnings
+import logging
+logging.getLogger("xgboost").setLevel(logging.ERROR)
+warnings.filterwarnings("ignore", category=UserWarning, module="xgboost")
+
 from mutagen import File as MutaFile
 
 # --- CONFIGURATION ---
-# Get the absolute path of the directory where app.py is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Build absolute paths to your assets
@@ -19,9 +22,6 @@ MODEL_PATH = os.path.join(BASE_DIR, 'models', 'music_classifier.joblib')
 SCALER_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'scaler.joblib')
 ENCODER_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'label_encoder.joblib')
 FEEDBACK_PATH = os.path.join(BASE_DIR, 'data', 'feedback.csv')
-
-# Use the temp folder provided by the OS for audio buffer
-TEMP_FILE = os.path.join(tempfile.gettempdir(), "temp_audio_upload.mp3")
 
 st.set_page_config(page_title="EDM Subgenre Classifier v5", page_icon="🎧", layout="centered")
 
@@ -32,7 +32,7 @@ if 'submitted' not in st.session_state:
     st.session_state.submitted = False
 
 def save_feedback(filename, predicted, corrected):
-    """Appends user feedback to a local CSV file for future model retraining."""
+    """Appends user feedback to a local CSV file. Note: will be replaced with Supabase in next version."""
     new_data = pd.DataFrame([{
         'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         'filename': filename,
@@ -49,7 +49,7 @@ def save_feedback(filename, predicted, corrected):
         new_data.to_csv(FEEDBACK_PATH, mode='a', header=False, index=False)
 
 def extract_features_v5_inference(file_path):
-    """Mirroring the v5 Batch Extractor logic for 59 features."""
+    """Extracts 59 audio features from a 30s window at the 60s mark, matching the v5 training pipeline."""
     try:
         y, sr = librosa.load(file_path, sr=22050, offset=60, duration=30, res_type='soxr_qq')
 
@@ -92,19 +92,19 @@ def extract_features_v5_inference(file_path):
         st.code(traceback.format_exc())
         return None
 
-def get_audio_duration(path):
-    try:
-        audio = MutaFile(path)
-        return audio.info.length if audio else 0
-    except:
-        return 0
-
 @st.cache_resource
 def load_models():
     model = joblib.load(MODEL_PATH)
     scaler = joblib.load(SCALER_PATH)
     encoder = joblib.load(ENCODER_PATH)
     return model, scaler, encoder
+    
+def get_audio_duration(path):
+    try:
+        audio = MutaFile(path)
+        return audio.info.length if audio else 0
+    except Exception:
+        return 0
 
 # --- SIDEBAR & CREDITS ---
 st.sidebar.title("🎧 Project Details")
@@ -117,7 +117,6 @@ st.sidebar.info("""
 st.sidebar.markdown("---")
 st.sidebar.markdown("Developer")
 st.sidebar.markdown("**Jody Suryatna**")
-# Replace 'your-profile-url' with your actual LinkedIn slug
 st.sidebar.markdown("[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=for-the-badge&logo=linkedin)](https://www.linkedin.com/in/jody-suryatna/)")
 st.sidebar.markdown("[![GitHub](https://img.shields.io/badge/GitHub-Repo-black?style=for-the-badge&logo=github)](https://github.com/rifoss/edm-subgenre-classifier)")
 
@@ -128,6 +127,10 @@ st.markdown("Identify the subgenre of your track using high-dimensional texture 
 uploaded_file = st.file_uploader("Upload a Techno, House, or Dubstep track (MP3/WAV)", type=["mp3", "wav"])
 
 if uploaded_file is not None:
+    # Derive extension from upload to support both MP3 and WAV
+    ext = os.path.splitext(uploaded_file.name)[1].lower()
+    TEMP_FILE = os.path.join(tempfile.gettempdir(), f"temp_audio_upload{ext}")
+
     # Check if a new file was uploaded to reset previous results
     if 'last_file' not in st.session_state or st.session_state.last_file != uploaded_file.name:
         st.session_state.prediction_results = None
@@ -142,11 +145,11 @@ if uploaded_file is not None:
     if st.button("Analyze Track"):
         with st.spinner("Analyzing audio textures..."):
             try:
-                # 1. Duration Check - Wrapped in a specific try/except for corrupted files
+                # 1. Validate duration - rejects short or corrupted files before feature extraction
                 try:
-                    duration = librosa.get_duration(path=TEMP_FILE)
+                    duration = get_audio_duration(TEMP_FILE)
                 except Exception:
-                    st.warning("*Invalid or Corrupted File:** Could not analyze file. Please ensure it is a valid, uncorrupted audio file.")
+                    st.warning("**Invalid or Corrupted File:** Could not analyze file. Please ensure it is a valid, uncorrupted audio file.")
                     st.stop() # Prevents further execution for this button click
 
                 if duration < 90:
@@ -156,17 +159,12 @@ if uploaded_file is not None:
                     features = extract_features_v5_inference(TEMP_FILE)
                     
                     if features is not None:
-                        # 3. Load Assets
-                        model = joblib.load(MODEL_PATH)
-                        scaler = joblib.load(SCALER_PATH)
-                        encoder = joblib.load(ENCODER_PATH)
+                        # 3. Load cached model assets
+                        model, scaler, encoder = load_models()
                         
-                        # 4. Prediction
+                        # 4. Scale features and run prediction
                         features_scaled = scaler.transform(features)
                         probs = model.predict_proba(features_scaled)[0]
-                        prediction = np.argmax(probs)
-                        genre = encoder.classes_[prediction]
-                        confidence = np.max(probs)
 
                         # STORE IN SESSION STATE
                         st.session_state.prediction_results = {
@@ -182,7 +180,6 @@ if uploaded_file is not None:
             except Exception as e:
                 st.error(f"**An unexpected error occurred:** {e}")
                         
-    # 5. Results Display
     if st.session_state.prediction_results:
         res = st.session_state.prediction_results
         st.success(f"### Predicted Genre: **{res['genre'].upper()}**")
@@ -244,7 +241,7 @@ if uploaded_file is not None:
         if st.session_state.get("submitted"):
             st.success("Thank you! Feedback saved for future model training.")
 
-    # --- CLEANUP ---
+    # --- CLEANUP: Remove temp file after processing to free disk space ---
     if os.path.exists(TEMP_FILE):
         try:
             os.remove(TEMP_FILE)
