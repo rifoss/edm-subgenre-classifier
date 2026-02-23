@@ -14,6 +14,8 @@ warnings.filterwarnings("ignore", category=UserWarning, module="xgboost")
 
 from mutagen import File as MutaFile
 
+from supabase import create_client, Client
+
 # --- CONFIGURATION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -21,7 +23,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'models', 'music_classifier.joblib')
 SCALER_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'scaler.joblib')
 ENCODER_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'label_encoder.joblib')
-FEEDBACK_PATH = os.path.join(BASE_DIR, 'data', 'feedback.csv')
 
 st.set_page_config(page_title="EDM Subgenre Classifier v5", page_icon="🎧", layout="centered")
 
@@ -31,22 +32,38 @@ if 'prediction_results' not in st.session_state:
 if 'submitted' not in st.session_state:
     st.session_state.submitted = False
 
+@st.cache_resource
+def load_models():
+    model = joblib.load(MODEL_PATH)
+    scaler = joblib.load(SCALER_PATH)
+    encoder = joblib.load(ENCODER_PATH)
+    return model, scaler, encoder
+
+@st.cache_resource
+def get_supabase_client():
+    url = st.secrets["supabase"]["url"]
+    key = st.secrets["supabase"]["key"]
+    return create_client(url, key)
+
 def save_feedback(filename, predicted, corrected):
-    """Appends user feedback to a local CSV file. Note: will be replaced with Supabase in next version."""
-    new_data = pd.DataFrame([{
-        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        'filename': filename,
-        'predicted_genre': predicted,
-        'corrected_genre': corrected
-    }])
+    """Inserts user feedback into Supabase for future model retraining."""
+    try:
+        client = get_supabase_client()
+        client.table("feedback").insert({
+            "timestamp": datetime.now().isoformat(),
+            "filename": filename,
+            "predicted_genre": predicted,
+            "corrected_genre": corrected
+        }).execute()
+    except Exception as e:
+        st.error(f"Failed to save feedback: {e}")
     
-    # Check if log exists to handle header correctly
-    if not os.path.isfile(FEEDBACK_PATH):
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(FEEDBACK_PATH), exist_ok=True)
-        new_data.to_csv(FEEDBACK_PATH, index=False)
-    else:
-        new_data.to_csv(FEEDBACK_PATH, mode='a', header=False, index=False)
+def get_audio_duration(path):
+    try:
+        audio = MutaFile(path)
+        return audio.info.length if audio else 0
+    except Exception:
+        return 0
 
 def extract_features_v5_inference(file_path):
     """Extracts 59 audio features from a 30s window at the 60s mark, matching the v5 training pipeline."""
@@ -91,20 +108,6 @@ def extract_features_v5_inference(file_path):
         import traceback
         st.code(traceback.format_exc())
         return None
-
-@st.cache_resource
-def load_models():
-    model = joblib.load(MODEL_PATH)
-    scaler = joblib.load(SCALER_PATH)
-    encoder = joblib.load(ENCODER_PATH)
-    return model, scaler, encoder
-    
-def get_audio_duration(path):
-    try:
-        audio = MutaFile(path)
-        return audio.info.length if audio else 0
-    except Exception:
-        return 0
 
 # --- SIDEBAR & CREDITS ---
 st.sidebar.title("🎧 Project Details")
