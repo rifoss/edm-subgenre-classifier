@@ -1,32 +1,39 @@
-import streamlit as st
-import librosa
+# Standard Library
+import os
+import tempfile
+import warnings
+import logging
+from datetime import datetime
+
+# Data and ML
 import numpy as np
 import pandas as pd
 import joblib
-import os
-from datetime import datetime
-import tempfile
 
-import warnings
-import logging
-logging.getLogger("xgboost").setLevel(logging.ERROR)
-warnings.filterwarnings("ignore", category=UserWarning, module="xgboost")
-
+# Audio Processing
+import librosa
 from mutagen import File as MutaFile
 
+# Web app
+import streamlit as st
+
+# Database
 from supabase import create_client, Client
+
+logging.getLogger("xgboost").setLevel(logging.ERROR)
+warnings.filterwarnings("ignore", category=UserWarning, module="xgboost")
 
 # --- CONFIGURATION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Build absolute paths to your assets
+# Absolute paths to model assets — ensures compatibility on both local and cloud environments
 MODEL_PATH = os.path.join(BASE_DIR, 'models', 'music_classifier.joblib')
 SCALER_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'scaler.joblib')
 ENCODER_PATH = os.path.join(BASE_DIR, 'data', 'processed', 'label_encoder.joblib')
 
 st.set_page_config(page_title="EDM Subgenre Classifier v5", page_icon="🎧", layout="centered")
 
-# Initialize Session State for persistence
+# Persist prediction results and feedback state across Streamlit reruns
 if 'prediction_results' not in st.session_state:
     st.session_state.prediction_results = None
 if 'submitted' not in st.session_state:
@@ -34,19 +41,33 @@ if 'submitted' not in st.session_state:
 
 @st.cache_resource
 def load_models():
-    model = joblib.load(MODEL_PATH)
+    """
+    Loads and caches the XGBoost model, StandardScaler, and LabelEncoder from disk.
+    Cached with @st.cache_resource so assets are only loaded once per session.
+    """
     scaler = joblib.load(SCALER_PATH)
     encoder = joblib.load(ENCODER_PATH)
     return model, scaler, encoder
 
 @st.cache_resource
 def get_supabase_client():
+    """
+    Initialises and caches the Supabase client using credentials from Streamlit Secrets.
+    Cached with @st.cache_resource to avoid reconnecting on every rerun.
+    """
     url = st.secrets["supabase"]["url"]
     key = st.secrets["supabase"]["key"]
     return create_client(url, key)
 
 def save_feedback(filename, predicted, corrected):
-    """Inserts user feedback into Supabase for future model retraining."""
+    """
+    Inserts a user correction into the Supabase feedback table for future model retraining.
+
+    Args:
+        filename (str): Name of the uploaded audio file
+        predicted (str): Genre predicted by the model
+        corrected (str): Correct genre as flagged by the user
+    """
     try:
         client = get_supabase_client()
         client.table("feedback").insert({
@@ -59,6 +80,15 @@ def save_feedback(filename, predicted, corrected):
         st.error(f"Failed to save feedback: {e}")
     
 def get_audio_duration(path):
+    """
+    Returns the duration of an audio file in seconds using Mutagen.
+    Used instead of librosa.get_duration to avoid potential hangs on cloud infrastructure.
+
+    Args:
+        path (str): Absolute path to the audio file
+    Returns:
+        float: Duration in seconds, or 0 if the file cannot be read
+    """
     try:
         audio = MutaFile(path)
         return audio.info.length if audio else 0
@@ -66,34 +96,56 @@ def get_audio_duration(path):
         return 0
 
 def extract_features_v5_inference(file_path):
-    """Extracts 59 audio features from a 30s window at the 60s mark, matching the v5 training pipeline."""
+    """
+    Extracts 59 audio features from a 30s window at the 60s mark, matching the v5 training pipeline.
+
+    Feature breakdown:
+        - 1 rhythmic (tempo)
+        - 5 spectral (centroid, rolloff, flatness, ZCR, RMS)
+        - 1 HPSS ratio (percussive/harmonic mean)
+        - 14 spectral contrast (mean + std across 7 bands)
+        - 26 MFCCs (mean + std of 13 coefficients)
+        - 12 chroma (mean across 12 pitch classes)
+
+    Args:
+        file_path (str): Absolute path to the audio file
+    Returns:
+        np.ndarray: Feature vector of shape (1, 59), or None if extraction fails
+    """
     try:
         y, sr = librosa.load(file_path, sr=22050, offset=60, duration=30, res_type='soxr_qq')
 
+        # --- Rhythmic ---
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-        tempo = float(np.squeeze(tempo))
+        tempo = float(np.squeeze(tempo)) # np.squeeze handles array return in newer librosa versions
 
+        # --- Spectral ---
         centroid = np.mean(librosa.feature.spectral_centroid(y=y, sr=sr))
         rolloff = np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr))
         flatness = np.mean(librosa.feature.spectral_flatness(y=y))
         zcr = np.mean(librosa.feature.zero_crossing_rate(y))
         rms = np.mean(librosa.feature.rms(y=y))
 
+        # --- Harmonic/Percussive Separation (HPSS) ---
         harmonic, percussive = librosa.effects.hpss(y)
         h_mean = np.mean(harmonic)
         p_mean = np.mean(percussive)
         ratio = p_mean / h_mean if h_mean > 0 else 0
 
+        # --- Spectral Contrast ---
         contrast = librosa.feature.spectral_contrast(y=y, sr=sr)
         contrast_mean = np.mean(contrast, axis=1)
         contrast_std = np.std(contrast, axis=1)
 
+        # --- MFCCs ---
         mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
         mfccs_mean = np.mean(mfccs, axis=1)
         mfccs_std = np.std(mfccs, axis=1)
 
+        # --- Chroma ---
         chroma = np.mean(librosa.feature.chroma_stft(y=y, sr=sr), axis=1)
 
+        # --- Assemble feature vector ---
         row = [float(tempo), centroid, rolloff, flatness, zcr, rms, ratio]
         for i in range(len(contrast_mean)):
             row.extend([contrast_mean[i], contrast_std[i]])
@@ -132,6 +184,7 @@ uploaded_file = st.file_uploader("Upload a Techno, House, or Dubstep track (MP3/
 if uploaded_file is not None:
     # Derive extension from upload to support both MP3 and WAV
     ext = os.path.splitext(uploaded_file.name)[1].lower()
+    # Write uploaded file to OS temp directory for librosa processing
     TEMP_FILE = os.path.join(tempfile.gettempdir(), f"temp_audio_upload{ext}")
 
     # Check if a new file was uploaded to reset previous results
@@ -184,9 +237,11 @@ if uploaded_file is not None:
                 st.error(f"**An unexpected error occurred:** {e}")
                         
     if st.session_state.prediction_results:
+        # Retrieve results from session state and render the prediction UI
         res = st.session_state.prediction_results
         st.success(f"### Predicted Genre: **{res['genre'].upper()}**")
         
+        # Flag low confidence predictions as potential hybrid or edge case tracks
         if res['confidence'] < 0.65:
             st.warning(f"**Low Confidence ({res['confidence']:.1%}):** This track may be a hybrid (e.g. Tech-House) or an edge case.")
         else:
