@@ -213,8 +213,6 @@ if uploaded_file is not None:
                 # 1. Validate duration - rejects short or corrupted files before feature extraction
                 try:
                     duration = get_audio_duration(TEMP_FILE)
-                    st.write(f"DEBUG: duration={duration}, TEMP_FILE={TEMP_FILE}, exists={os.path.exists(TEMP_FILE)}")
-                except Exception:
                     st.warning("**Invalid or Corrupted File:** Could not analyze file. Please ensure it is a valid, uncorrupted audio file.")
                     st.stop() # Prevents further execution for this button click
 
