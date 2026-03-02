@@ -45,6 +45,7 @@ def load_models():
     Loads and caches the XGBoost model, StandardScaler, and LabelEncoder from disk.
     Cached with @st.cache_resource so assets are only loaded once per session.
     """
+    model = joblib.load(MODEL_PATH)
     scaler = joblib.load(SCALER_PATH)
     encoder = joblib.load(ENCODER_PATH)
     return model, scaler, encoder
@@ -91,7 +92,8 @@ def get_audio_duration(path):
     """
     try:
         audio = MutaFile(path)
-        return audio.info.length if audio else 0
+        if audio and audio.info.length > 0:
+            return audio.info.length
     except Exception:
         pass
     
