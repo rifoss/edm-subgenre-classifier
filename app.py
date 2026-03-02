@@ -93,7 +93,14 @@ def get_audio_duration(path):
         audio = MutaFile(path)
         return audio.info.length if audio else 0
     except Exception:
+        pass
+    
+    # Fallback to librosa for WAV or files Mutagen cannot read
+    try:
+        return librosa.get_duration(path=path)
+    except Exception:
         return 0
+
 
 def extract_features_v5_inference(file_path):
     """
